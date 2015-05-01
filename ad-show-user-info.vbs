@@ -177,9 +177,13 @@ End Function '== AdGetDomainDistinguished()
 strDomainNameNetbios =  ADGetDomainNetBIOSName()
 strDomainNameDn = AdGetDomainDistinguished()
 
+WScript.Echo "Domain NetBIOS:   " & strDomainNameNetbios
+WScript.Echo "Domain DN:        " & strDomainNameDn
+
 strAccount = "firstname.lastname"
 strAccount = InputBox("Enter the account name to investigate:", WScript.ScriptName, strAccount)
 
+WScript.Echo "Account:          " & strAccount
 
 Set objDomainNT = GetObject("WinNT://" & strDomainNameNetbios) 
 With objDomainNT
@@ -197,7 +201,7 @@ With objDomainNT
 
 '' DOMAIN SPECIFIC
 strDn = DsQueryGetDn(strDomainNameDn, strAccount)
-WScript.Echo "Distinghed Name: " & strDn
+WScript.Echo "Distingshed name: " & strDn
 
 Dim	dtmDateBefore
 Dim	dtmLastChanged
@@ -205,7 +209,7 @@ Dim	dtmLastChanged
 On Error Resume Next
 Set objUser = GetObject("LDAP://" & strDn)
 If Err.Number = 0 Then
-	WScript.Echo "Connected to " & strDn
+	'' WScript.Echo "Connected to " & strDn
 
 	WScript.Echo objUser.Get("displayName")
 	WScript.Echo objUser.Get("mail")
@@ -224,9 +228,7 @@ If Err.Number = 0 Then
 		dtmDateBefore = DateAdd("d", intMaxPwdAge, objUser.PasswordLastChanged)
 		
 		WScript.Echo "Password needs to be changed every " & intMaxPwdAge & " days and that's before " & dtmDateBefore & ", you have " & DateDiff("d", Now(), dtmDateBefore) & " days left to change your password."
-		
 	End If
-	
 	
 	Set objUser = Nothing
 Else

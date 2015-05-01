@@ -21,6 +21,7 @@ Dim		strDn
 Dim		objUser
 
 
+
 Function EncloseWithDQ(ByVal s)
 	''
 	''	Returns an enclosed string s with double quotes around it.
@@ -41,6 +42,7 @@ Function EncloseWithDQ(ByVal s)
 End Function '' of Function EncloseWithDQ
 
 
+
 Function RemoveEnclosedDQ(ByVal s)
 	''
 	''	Removes the enclosed Double Quotes around a string
@@ -58,6 +60,7 @@ Function RemoveEnclosedDQ(ByVal s)
 
 	RemoveEnclosedDQ = s
 End Function '' of Function EncloseWithDQ
+
 
 
 Function DsQueryGetDn(ByVal strRootDse, ByVal strCn)
@@ -111,6 +114,7 @@ End Function '' DsQueryGetDn
 'Set objDomainNt = GetObject
 
 
+
 Dim 	intUac
 Dim		objDomainNT
 Dim		intMaxPwdAge
@@ -118,8 +122,66 @@ Dim		intMaxPwdAgeSeconds
 Dim		intMinPwdAgeSeconds
 Dim		intLockOutObservationWindowSeconds
 Dim		intLockoutDurationSeconds
+Dim		strDomainNameNetbios
+Dim		strDomainNameDn
+Dim		strAccount
 
-Set objDomainNT = GetObject("WinNT://PROD") 
+
+
+Function ADGetDomainNetBIOSName
+	''
+	''	Retrieve the NetBIOS domain name from the current domain.
+	''
+	''	Returns:
+	''		The NetBIOS domain name
+	''
+
+	Const	ADS_NAME_INITYPE_GC = 3
+	Const	ADS_NAME_TYPE_NT4 = 3
+	Const	ADS_NAME_TYPE_1779 = 1
+	
+	Dim	oRootDSE
+	Dim	sDNSDomain
+	Dim	sNetBIOSDomain
+	Dim	oTrans
+	
+	'' Retrieve the current DNS domain name
+	Set oRootDSE = GetObject("LDAP://RootDSE")
+	sDNSDomain = oRootDSE.Get("defaultNamingContext")
+	
+	'' Convert the DNS domain name to a NetBIOS name
+	Set oTrans = CreateObject("NameTranslate")
+	oTrans.Init ADS_NAME_INITYPE_GC, ""
+	oTrans.Set ADS_NAME_TYPE_1779, sDNSDomain
+	sNetBIOSDomain = oTrans.Get(ADS_NAME_TYPE_NT4)
+	
+	'' Remove the trailing back slash
+	ADGetDomainNetBIOSName = Left(sNetBIOSDomain, Len(sNetBIOSDomain) - 1)
+End Function '// ADGetDomainNetBIOSName
+
+
+
+Function AdGetDomainDistinguished
+	''
+	''	Returns the current domain as DC=domain,DC=ext (RFC 1779)
+	''
+	Dim	oRootDse
+	
+	Set oRootDSE = GetObject("LDAP://RootDSE")
+	AdGetDomainDistinguished = oRootDSE.Get("defaultNamingContext")
+	Set oRootDSE = Nothing
+End Function '== AdGetDomainDistinguished()
+
+
+
+strDomainNameNetbios =  ADGetDomainNetBIOSName()
+strDomainNameDn = AdGetDomainDistinguished()
+
+strAccount = "firstname.lastname"
+strAccount = InputBox("Enter the account name to investigate:", WScript.ScriptName, strAccount)
+
+
+Set objDomainNT = GetObject("WinNT://" & strDomainNameNetbios) 
 With objDomainNT
     intMaxPwdAge =                             .Get("MaxPasswordAge")    'get NT value for MaxPasswordAge
     intMaxPwdAge =                             (intMaxPwdAge/SEC_IN_DAY) ' maximum password age in days
@@ -130,14 +192,15 @@ With objDomainNT
  End With 'objDomainNT
  Set objDomainNT = Nothing
  
- WScript.Echo intMaxPwdAge
+ 
+ 'WScript.Echo intMaxPwdAge
 
+'' DOMAIN SPECIFIC
+strDn = DsQueryGetDn(strDomainNameDn, strAccount)
+WScript.Echo "Distinghed Name: " & strDn
 
-
-
-
-strDn = DsQueryGetDn("DC=prod,DC=ns,DC=nl", "Perry.vandenHondel")
-WScript.Echo strDn
+Dim	dtmDateBefore
+Dim	dtmLastChanged
 
 On Error Resume Next
 Set objUser = GetObject("LDAP://" & strDn)
@@ -148,15 +211,20 @@ If Err.Number = 0 Then
 	WScript.Echo objUser.Get("mail")
 	
 	
-	WScript.Echo objUser.PasswordLastChanged
+	
 	
 	intUac = objUser.Get("userAccountControl")
 	If intUac And ADS_UF_DONT_EXPIRE_PASSWD Then
-		
-		WScript.Echo "Password does not exipre"
-		
+		WScript.Echo "Password does not expires"
 	Else
 		WScript.Echo "Password expires"
+		dtmLastChanged = objUser.PasswordLastChanged
+		
+		WScript.Echo "Password last changed: " & dtmLastChanged
+		dtmDateBefore = DateAdd("d", intMaxPwdAge, objUser.PasswordLastChanged)
+		
+		WScript.Echo "Password needs to be changed every " & intMaxPwdAge & " days and that's before " & dtmDateBefore & ", you have " & DateDiff("d", Now(), dtmDateBefore) & " days left to change your password."
+		
 	End If
 	
 	
